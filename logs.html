@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>System Logs — Driver Verification</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --navy: #0a1628; --accent: #1e88e5; --cyan: #00b4d8;
+      --success: #00c853; --danger: #d32f2f; --warn: #ff8f00;
+      --surface: #0e1f3d; --card: #122040; --border: #1e3560;
+      --text: #e8f0fe; --muted: #7b9acf;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sora', sans-serif; background: var(--navy); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .topbar-nav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 6px; transition: all .2s; margin-left: 4px; }
+    .topbar-nav a:hover { background: var(--border); color: var(--text); }
+    .topbar-nav a.active { background: rgba(30,136,229,.15); color: var(--accent); }
+
+    .page { flex: 1; max-width: 960px; margin: 0 auto; padding: 36px 24px; width: 100%; }
+
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .page-title { font-size: 24px; font-weight: 700; }
+    .page-desc  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 10px; font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .2s; }
+    .btn-danger  { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+    .btn-danger:hover { background: rgba(211,47,47,.12); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+    /* STATS ROW */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .stat-val  { font-size: 32px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .stat-key  { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: .05em; text-transform: uppercase; }
+    .c-green { color: var(--success); }
+    .c-red   { color: var(--danger); }
+    .c-blue  { color: var(--accent); }
+
+    /* FILTER BAR */
+    .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-wrap { position: relative; flex: 1; min-width: 200px; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); }
+    .search-input { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'Sora', sans-serif; font-size: 13px; padding: 9px 14px 9px 36px; outline: none; transition: border-color .2s; }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: #1e3560; }
+    .filter-chip { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-family: 'JetBrains Mono', monospace; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--muted); transition: all .2s; }
+    .filter-chip.active-all    { border-color: var(--accent); color: var(--accent); background: rgba(30,136,229,.1); }
+    .filter-chip.active-grant  { border-color: var(--success); color: var(--success); background: rgba(0,200,83,.1); }
+    .filter-chip.active-deny   { border-color: var(--danger); color: var(--danger); background: rgba(211,47,47,.1); }
+
+    /* LOG TABLE */
+    .log-table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+    .log-table-head { display: grid; grid-template-columns: 2fr 2fr 1fr 80px; padding: 12px 20px; border-bottom: 1px solid var(--border); font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .log-rows { max-height: 60vh; overflow-y: auto; }
+    .log-row { display: grid; grid-template-columns: 2fr 2fr 1fr 80px; padding: 13px 20px; border-bottom: 1px solid rgba(30,53,96,.5); align-items: center; transition: background .15s; }
+    .log-row:last-child { border-bottom: none; }
+    .log-row:hover { background: rgba(30,136,229,.05); }
+    .log-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .name-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .log-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+    .log-date { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #3a5590; }
+    .access-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-family: 'JetBrains Mono', monospace; padding: 3px 10px; border-radius: 20px; }
+    .pill-grant { background: rgba(0,200,83,.1); border: 1px solid rgba(0,200,83,.3); color: var(--success); }
+    .pill-deny  { background: rgba(211,47,47,.1); border: 1px solid rgba(211,47,47,.3); color: var(--danger); }
+
+    .empty-state { padding: 60px 20px; text-align: center; color: var(--muted); }
+    .empty-icon  { font-size: 48px; opacity: .3; margin-bottom: 12px; }
+
+    /* SCROLLBAR */
+    .log-rows::-webkit-scrollbar { width: 4px; }
+    .log-rows::-webkit-scrollbar-track { background: transparent; }
+    .log-rows::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    footer { border-top: 1px solid var(--border); padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 13px 18px; font-size: 13px; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.4); transform: translateY(20px); opacity: 0; transition: all .3s ease; z-index: 999; }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--success); }
+  </style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">🛡</div>
+    <div>
+      <div class="topbar-title">Driver Safety Monitoring</div>
+      <div class="topbar-sub">SYSTEM ACCESS LOGS</div>
+    </div>
+  </div>
+  <nav class="topbar-nav">
+    <a href="/">Dashboard</a>
+    <a href="/register">Register</a>
+    <a href="/users">Users</a>
+    <a href="/logs" class="active">Logs</a>
+  </nav>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Access Logs</div>
+      <div class="page-desc">All face recognition events recorded by the system</div>
+    </div>
+    <button class="btn btn-danger" onclick="clearLogs()">🗑 Clear Logs</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val c-blue" id="statTotal">—</div>
+      <div class="stat-key">Total Events</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val c-green" id="statGranted">—</div>
+      <div class="stat-key">Access Granted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statUnique" style="color:var(--cyan)">—</div>
+      <div class="stat-key">Unique Drivers</div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search by name..." oninput="renderLogs()"/>
+    </div>
+    <div class="filter-chip active-all" id="filterAll"    onclick="setFilter('all')">All</div>
+    <div class="filter-chip"            id="filterGrant"  onclick="setFilter('grant')">✅ Granted</div>
+    <div class="filter-chip"            id="filterUnknown" onclick="setFilter('unknown')">❌ Unknown</div>
+    <button class="btn btn-ghost" onclick="loadLogs()">↻ Refresh</button>
+  </div>
+
+  <!-- Table -->
+  <div class="log-table-wrap">
+    <div class="log-table-head">
+      <span>Driver Name</span>
+      <span>Date</span>
+      <span>Time</span>
+      <span>Status</span>
+    </div>
+    <div class="log-rows" id="logRows">
+      <div class="empty-state"><div class="empty-icon">📋</div>Loading logs...</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>🛡 Driver Safety Monitoring</span>
+  <span><a href="/">Dashboard</a> · <a href="/users">Users</a></span>
+</footer>
+
+<div id="toast"><span id="toastIcon">✅</span><span id="toastMsg"></span></div>
+
+<script>
+  let allLogs = [];
+  let activeFilter = 'all';
+
+  function toast(msg, type='success') {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toastIcon').textContent = type==='success'?'✅':'ℹ️';
+    t.className = 'show ' + type;
+    setTimeout(() => t.className = '', 3000);
+  }
+
+  function setFilter(f) {
+    activeFilter = f;
+    ['All','Grant','Unknown'].forEach(x => {
+      document.getElementById('filter'+x).className = 'filter-chip';
+    });
+    const map = { all:'active-all', grant:'active-grant', unknown:'active-deny' };
+    document.getElementById('filter' + f.charAt(0).toUpperCase() + f.slice(1)).className = 'filter-chip ' + map[f];
+    renderLogs();
+  }
+
+  function loadLogs() {
+    fetch('/logs_json')
+      .then(r => r.json())
+      .then(data => {
+        // Reverse so newest first
+        allLogs = data.reverse();
+        updateStats();
+        renderLogs();
+      });
+  }
+
+  function updateStats() {
+    document.getElementById('statTotal').textContent   = allLogs.length;
+    const granted = allLogs.filter(l => !l.startsWith('Unknown')).length;
+    document.getElementById('statGranted').textContent = granted;
+    const names = new Set(allLogs.map(l => l.split(',')[0].trim()));
+    names.delete('Unknown');
+    document.getElementById('statUnique').textContent  = names.size;
+  }
+
+  function renderLogs() {
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const rows   = document.getElementById('logRows');
+
+    let filtered = allLogs.filter(l => {
+      const name = l.split(',')[0].trim();
+      const matchSearch  = !search || name.toLowerCase().includes(search);
+      const matchFilter  = activeFilter === 'all'
+        || (activeFilter === 'grant'   && name !== 'Unknown')
+        || (activeFilter === 'unknown' && name === 'Unknown');
+      return matchSearch && matchFilter;
+    });
+
+    if (!filtered.length) {
+      rows.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div>No matching logs</div></div>';
+      return;
+    }
+
+    rows.innerHTML = filtered.map(entry => {
+      const parts   = entry.split(',');
+      const name    = parts[0].trim();
+      const dateStr = parts[1] ? parts[1].trim() : '';
+      const isKnown = name !== 'Unknown';
+
+      let dateLabel = '', timeLabel = '';
+      if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d)) {
+          dateLabel = d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+          timeLabel = d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        } else {
+          // fallback — raw string
+          const sp = dateStr.split(' ');
+          dateLabel = sp[0] || '';
+          timeLabel = sp[1] ? sp[1].slice(0,8) : '';
+        }
+      }
+
+      const dotColor  = isKnown ? 'var(--success)' : 'var(--danger)';
+      const pillClass = isKnown ? 'pill-grant' : 'pill-deny';
+      const pillText  = isKnown ? 'GRANTED' : 'DENIED';
+
+      return `
+        <div class="log-row">
+          <div class="log-name">
+            <span class="name-dot" style="background:${dotColor}"></span>
+            ${name}
+          </div>
+          <div class="log-date">${dateLabel}</div>
+          <div class="log-time">${timeLabel}</div>
+          <div><span class="access-pill ${pillClass}">${pillText}</span></div>
+        </div>`;
+    }).join('');
+  }
+
+  function clearLogs() {
+    if (!confirm('Clear all logs? This cannot be undone.')) return;
+    fetch('/clear_logs', { method: 'POST' })
+      .then(() => { allLogs = []; updateStats(); renderLogs(); toast('Logs cleared'); });
+  }
+
+  loadLogs();
+  setInterval(loadLogs, 5000);
+</script>
+</body>
+</html>

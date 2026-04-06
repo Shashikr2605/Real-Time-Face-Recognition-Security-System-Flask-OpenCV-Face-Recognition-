@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Driver Safety Monitoring</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --navy:    #0a1628;
+      --accent:  #1e88e5;
+      --cyan:    #00b4d8;
+      --success: #00c853;
+      --danger:  #d32f2f;
+      --warn:    #ff8f00;
+      --surface: #0e1f3d;
+      --card:    #122040;
+      --border:  #1e3560;
+      --text:    #e8f0fe;
+      --muted:   #7b9acf;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sora', sans-serif; background: var(--navy); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* TOPBAR */
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub   { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; letter-spacing: .08em; }
+    .topbar-nav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 6px; transition: all .2s; margin-left: 4px; }
+    .topbar-nav a:hover  { background: var(--border); color: var(--text); }
+    .topbar-nav a.active { background: rgba(30,136,229,.15); color: var(--accent); }
+    .topbar-nav a.btn-add { background: var(--accent); color: #fff; }
+    .topbar-nav a.btn-add:hover { background: #1976d2; }
+
+    /* PAGE */
+    .page { flex: 1; max-width: 1100px; margin: 0 auto; padding: 36px 24px; width: 100%; }
+
+    /* HERO STRIP */
+    .hero { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .hero-title { font-size: 26px; font-weight: 700; }
+    .hero-sub   { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .live-pill  { display: flex; align-items: center; gap: 7px; font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 6px 14px; border-radius: 20px; background: rgba(0,200,83,.1); border: 1px solid rgba(0,200,83,.3); color: var(--success); }
+    .live-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* GRID */
+    .grid { display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
+
+    /* CARD */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .card-head { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .card-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .ci-blue  { background: rgba(30,136,229,.15); }
+    .ci-green { background: rgba(0,200,83,.12); }
+    .ci-warn  { background: rgba(255,143,0,.12); }
+    .card-title { font-size: 14px; font-weight: 600; }
+    .card-meta  { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+    .card-body  { padding: 0; }
+
+    /* CAMERA — browser video + canvas overlay */
+    .cam-wrap { position: relative; background: #050d1a; overflow: hidden; width: 100%; aspect-ratio: 4/3; }
+    #videoFeed  { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #faceCanvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* Corner brackets */
+    .cam-corner { position: absolute; width: 24px; height: 24px; border-color: var(--cyan); border-style: solid; pointer-events: none; }
+    .cam-corner.tl { top:12px; left:12px;  border-width:2px 0 0 2px; border-radius:3px 0 0 0; }
+    .cam-corner.tr { top:12px; right:12px; border-width:2px 2px 0 0; border-radius:0 3px 0 0; }
+    .cam-corner.bl { bottom:12px; left:12px;  border-width:0 0 2px 2px; border-radius:0 0 0 3px; }
+    .cam-corner.br { bottom:12px; right:12px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
+
+    /* Status overlay */
+    .cam-status-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(5,13,26,.85));
+      padding: 20px 16px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .status-badge { display: flex; align-items: center; gap: 7px; font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 14px; border-radius: 20px; }
+    .status-badge.granted { background: rgba(0,200,83,.15); border:1px solid var(--success); color:var(--success); }
+    .status-badge.denied  { background: rgba(211,47,47,.15); border:1px solid var(--danger);  color:var(--danger); }
+    .status-badge.idle    { background: rgba(123,154,207,.1); border:1px solid var(--border); color:var(--muted); }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+    /* Camera permission banner */
+    #camPermBanner {
+      position: absolute; inset: 0; background: rgba(5,13,26,.92);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; font-size: 14px; color: var(--muted); text-align: center; padding: 24px;
+    }
+    #camPermBanner button {
+      padding: 10px 24px; border-radius: 10px; background: var(--accent); border: none;
+      color: #fff; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px;
+      cursor: pointer;
+    }
+    #camPermBanner button:hover { background: #1976d2; }
+
+    /* RIGHT PANEL */
+    .info-row { display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:10px 22px; border-bottom:1px solid var(--border); }
+    .info-row:last-child { border-bottom:none; }
+    .info-key { color:var(--muted); }
+    .info-val { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; }
+    .pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-family:'JetBrains Mono',monospace; padding:3px 10px; border-radius:20px; }
+    .pill-active  { background:rgba(0,180,216,.12);  border:1px solid var(--cyan);   color:var(--cyan); }
+    .pill-success { background:rgba(0,200,83,.12);   border:1px solid var(--success); color:var(--success); }
+    .pill-danger  { background:rgba(211,47,47,.12);  border:1px solid var(--danger);  color:var(--danger); }
+    .pill-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+    /* LOG LIST */
+    .log-list { list-style:none; max-height:220px; overflow-y:auto; }
+    .log-item { padding:9px 22px; border-bottom:1px solid var(--border); font-size:12px; font-family:'JetBrains Mono',monospace; display:flex; align-items:center; gap:8px; }
+    .log-item:last-child { border-bottom:none; }
+    .log-name { color:var(--text); font-weight:500; }
+    .log-time { color:var(--muted); font-size:11px; margin-left:auto; }
+    .log-dot  { width:6px; height:6px; border-radius:50%; background:var(--success); flex-shrink:0; }
+    .log-empty { padding:20px 22px; font-size:13px; color:var(--muted); text-align:center; }
+
+    /* STAT CARDS */
+    .stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px 22px; }
+    .stat { background:#0a1628; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
+    .stat-val { font-size:26px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+    .stat-key { font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:.04em; }
+    .stat-val.green { color:var(--success); }
+    .stat-val.red   { color:var(--danger); }
+    .stat-val.blue  { color:var(--accent); }
+
+    /* FOOTER */
+    footer { border-top:1px solid var(--border); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+    footer a { color:var(--muted); text-decoration:none; }
+    footer a:hover { color:var(--text); }
+  </style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">🛡</div>
+    <div>
+      <div class="topbar-title">Driver Safety Monitoring</div>
+      <div class="topbar-sub">AI-POWERED IDENTITY VERIFICATION</div>
+    </div>
+  </div>
+  <nav class="topbar-nav">
+    <a href="/" class="active">Dashboard</a>
+    <a href="/register" class="btn-add">+ Register</a>
+    <a href="/users">Users</a>
+    <a href="/logs">Logs</a>
+  </nav>
+</nav>
+
+<div class="page">
+
+  <div class="hero">
+    <div>
+      <div class="hero-title">Live Detection</div>
+      <div class="hero-sub">Monitoring driver identity in real-time</div>
+    </div>
+    <div class="live-pill">
+      <div class="live-dot"></div> LIVE
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT: CAMERA -->
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-blue">📹</div>
+          <div>
+            <div class="card-title">Camera Feed</div>
+            <div class="card-meta">REAL-TIME FACE RECOGNITION</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="cam-wrap">
+            <!-- Browser camera -->
+            <video id="videoFeed" autoplay playsinline muted></video>
+            <!-- Canvas for drawing face boxes on top of video -->
+            <canvas id="faceCanvas"></canvas>
+            <!-- Hidden canvas used to grab frames for /detect -->
+            <canvas id="captureCanvas" style="display:none;"></canvas>
+
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+            <div class="cam-status-overlay">
+              <div class="status-badge idle" id="accessBadge">
+                <span class="status-dot"></span>
+                <span id="accessText">DETECTING...</span>
+              </div>
+              <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);" id="detectedName">—</div>
+            </div>
+
+            <!-- Shown until the user grants camera permission -->
+            <div id="camPermBanner">
+              <div style="font-size:32px;">📷</div>
+              <div>Camera access is required for live detection.</div>
+              <button onclick="startCamera()">Enable Camera</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: INFO + LOGS -->
+    <div>
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-green">📊</div>
+          <div>
+            <div class="card-title">Session Stats</div>
+            <div class="card-meta">SINCE APP START</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-val green" id="statGranted">0</div>
+            <div class="stat-key">GRANTED</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val red"   id="statDenied">0</div>
+            <div class="stat-key">DENIED</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val blue"  id="statFaces">—</div>
+            <div class="stat-key">KNOWN FACES</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val"       id="statTime">—</div>
+            <div class="stat-key">UPTIME</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent access log -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-warn">📋</div>
+          <div>
+            <div class="card-title">Recent Access</div>
+            <div class="card-meta">LAST 8 EVENTS</div>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <ul class="log-list" id="logList">
+            <li class="log-empty">No events yet</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>🛡 Driver Safety Monitoring System</span>
+  <span><a href="/register">Register Driver</a> · <a href="/logs">Full Logs</a></span>
+</footer>
+
+<script>
+  /* ─── State ─────────────────────────────────────── */
+  let granted   = 0, denied = 0;
+  let detecting = false;          // prevent overlapping /detect calls
+  const startTime = Date.now();
+
+  const video         = document.getElementById('videoFeed');
+  const faceCanvas    = document.getElementById('faceCanvas');
+  const captureCanvas = document.getElementById('captureCanvas');
+  const faceCtx       = faceCanvas.getContext('2d');
+
+  /* ─── Start browser camera ───────────────────────── */
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      video.srcObject = stream;
+      document.getElementById('camPermBanner').style.display = 'none';
+      video.addEventListener('loadedmetadata', () => {
+        faceCanvas.width    = video.videoWidth;
+        faceCanvas.height   = video.videoHeight;
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height= video.videoHeight;
+        startDetection();
+      });
+    } catch (err) {
+      const banner = document.getElementById('camPermBanner');
+      banner.innerHTML = `<div style="font-size:32px;">⛔</div>
+        <div>Camera access denied.<br>Please allow camera in your browser settings and reload.</div>`;
+    }
+  }
+
+  /* Try auto-start; show button if browser requires a gesture */
+  startCamera();
+
+  /* ─── Detection loop — sends a frame to /detect every 1 s ─── */
+  function startDetection() {
+    setInterval(async () => {
+      if (detecting || video.videoWidth === 0) return;
+      detecting = true;
+      try {
+        const ctx = captureCanvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const b64 = captureCanvas.toDataURL('image/jpeg', 0.7);
+
+        const res  = await fetch('/detect', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ image: b64 })
+        });
+        const data = await res.json();
+
+        /* Update badge */
+        const badge = document.getElementById('accessBadge');
+        const text  = document.getElementById('accessText');
+        const nameEl= document.getElementById('detectedName');
+
+        if (data.status === 'ACCESS GRANTED') {
+          badge.className = 'status-badge granted';
+          text.textContent = 'ACCESS GRANTED';
+          nameEl.textContent = data.name;
+          granted++;
+          document.getElementById('statGranted').textContent = granted;
+        } else if (data.status === 'ACCESS DENIED') {
+          badge.className = 'status-badge denied';
+          text.textContent = 'ACCESS DENIED';
+          nameEl.textContent = 'Unknown';
+          denied++;
+          document.getElementById('statDenied').textContent = denied;
+        } else {
+          badge.className = 'status-badge idle';
+          text.textContent = data.status || 'DETECTING...';
+          nameEl.textContent = '—';
+        }
+
+        /* Draw face boxes on the overlay canvas */
+        drawFaces(data.faces || []);
+      } catch (e) {
+        console.warn('detect error', e);
+      } finally {
+        detecting = false;
+      }
+    }, 1000);
+  }
+
+  /* Draw face bounding-boxes + labels onto the overlay canvas */
+  function drawFaces(faces) {
+    /* Sync canvas size to actual rendered video dimensions */
+    const rect = video.getBoundingClientRect();
+    if (faceCanvas.width !== video.videoWidth) {
+      faceCanvas.width  = video.videoWidth;
+      faceCanvas.height = video.videoHeight;
+    }
+
+    faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+
+    /* Scale: the video element may render smaller than its natural resolution */
+    const scaleX = faceCanvas.width  / (video.videoWidth  || 1);
+    const scaleY = faceCanvas.height / (video.videoHeight || 1);
+
+    faces.forEach(f => {
+      const { top, right, bottom, left } = f.box;
+      const known = f.name !== 'Unknown';
+      const color = known ? '#00c853' : '#d32f2f';
+
+      faceCtx.strokeStyle = color;
+      faceCtx.lineWidth   = 2;
+      faceCtx.strokeRect(left * scaleX, top * scaleY,
+                         (right - left) * scaleX, (bottom - top) * scaleY);
+
+      /* Label */
+      faceCtx.fillStyle = color;
+      faceCtx.font      = 'bold 13px "JetBrains Mono", monospace';
+      faceCtx.fillText(f.name, left * scaleX + 4, top * scaleY - 6);
+    });
+  }
+
+  /* ─── Poll logs sidebar every 2 s ────────────────── */
+  setInterval(() => {
+    fetch('/logs_json')
+      .then(r => r.json())
+      .then(data => {
+        const list = document.getElementById('logList');
+        if (!data.length) return;
+        list.innerHTML = '';
+        data.slice(0, 8).forEach(item => {
+          const li = document.createElement('li');
+          li.className = 'log-item';
+          const [name, time] = item.split(' - ');
+          li.innerHTML = `<span class="log-dot"></span>
+            <span class="log-name">${(name||'').trim()}</span>
+            <span class="log-time">${time ? time.trim().slice(11,19) : ''}</span>`;
+          list.appendChild(li);
+        });
+      }).catch(() => {});
+  }, 2000);
+
+  /* ─── Uptime counter ─────────────────────────────── */
+  setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    document.getElementById('statTime').textContent =
+      h > 0 ? `${h}h ${m%60}m` : `${m}m ${s%60}s`;
+  }, 1000);
+
+  /* ─── Known faces count ──────────────────────────── */
+  fetch('/known_count')
+    .then(r => r.json())
+    .then(d => document.getElementById('statFaces').textContent = d.count)
+    .catch(() => {});
+</script>
+</body>
+</html>

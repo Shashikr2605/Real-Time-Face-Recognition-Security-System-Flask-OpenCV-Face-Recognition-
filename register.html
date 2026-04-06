@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register Face — Driver Verification</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --navy:    #0a1628; --accent: #1e88e5; --cyan: #00b4d8;
+      --success: #00c853; --danger: #d32f2f;
+      --surface: #0e1f3d; --card: #122040; --border: #1e3560;
+      --text: #e8f0fe; --muted: #7b9acf;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sora', sans-serif; background: var(--navy); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .topbar-nav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 6px; transition: all .2s; margin-left: 4px; }
+    .topbar-nav a:hover { background: var(--border); color: var(--text); }
+    .topbar-nav a.active { background: rgba(30,136,229,.15); color: var(--accent); }
+
+    .page { flex: 1; max-width: 1080px; margin: 0 auto; padding: 36px 24px; width: 100%; }
+    .page-title { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .page-desc  { font-size: 13px; color: var(--muted); margin-bottom: 26px; }
+
+    .step-chips { display: flex; gap: 8px; margin-bottom: 26px; }
+    .chip { display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); background: var(--card); }
+    .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(30,136,229,.1); }
+    .chip.done   { border-color: var(--success); color: var(--success); background: rgba(0,200,83,.08); }
+    .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .grid { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .card-head { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .card-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .ci-blue { background: rgba(30,136,229,.15); } .ci-cyan { background: rgba(0,180,216,.15); } .ci-green { background: rgba(0,200,83,.12); }
+    .card-title { font-size: 14px; font-weight: 600; }
+    .card-meta  { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+    .card-body  { padding: 22px; }
+
+    /* CAMERA — now a <video> element */
+    .cam-wrap { position: relative; background: #050d1a; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; }
+    #camFeed  { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cam-corner { position: absolute; width: 24px; height: 24px; border-color: var(--cyan); border-style: solid; pointer-events: none; }
+    .cam-corner.tl { top:12px; left:12px;  border-width:2px 0 0 2px; border-radius:3px 0 0 0; }
+    .cam-corner.tr { top:12px; right:12px; border-width:2px 2px 0 0; border-radius:0 3px 0 0; }
+    .cam-corner.bl { bottom:12px; left:12px;  border-width:0 0 2px 2px; border-radius:0 0 0 3px; }
+    .cam-corner.br { bottom:12px; right:12px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
+    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:160px; height:210px; border:2px dashed rgba(0,180,216,.55); border-radius:50%; animation:oval-pulse 2.5s ease-in-out infinite; pointer-events:none; }
+    @keyframes oval-pulse { 0%,100%{border-color:rgba(0,180,216,.4)} 50%{border-color:rgba(0,180,216,.9)} }
+    .scan-line { position:absolute; left:10%; width:80%; height:2px; background:linear-gradient(90deg,transparent,var(--cyan),transparent); animation:scan-move 2.2s linear infinite; pointer-events:none; }
+    @keyframes scan-move { from{top:15%} to{top:85%} }
+    .cam-badge { position:absolute; top:12px; left:50%; transform:translateX(-50%); font-size:11px; font-family:'JetBrains Mono',monospace; padding:3px 12px; border-radius:20px; backdrop-filter:blur(6px); border:1px solid var(--cyan); color:var(--cyan); background:rgba(0,180,216,.12); }
+    .cam-count { position:absolute; bottom:12px; right:12px; font-size:11px; font-family:'JetBrains Mono',monospace; background:rgba(0,0,0,.65); border:1px solid var(--border); border-radius:8px; padding:4px 10px; }
+    .cam-count span { color:var(--cyan); font-weight:600; }
+
+    /* Permission banner inside camera card */
+    #camPermBanner {
+      position: absolute; inset: 0; background: rgba(5,13,26,.93);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; font-size: 14px; color: var(--muted); text-align: center; padding: 24px;
+      border-radius: 12px;
+    }
+    #camPermBanner button {
+      padding: 10px 24px; border-radius: 10px; background: var(--accent); border: none;
+      color: #fff; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer;
+    }
+    #camPermBanner button:hover { background: #1976d2; }
+
+    .thumb-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:14px; }
+    .thumb-slot { aspect-ratio:1; border-radius:8px; background:#070f1e; border:1px dashed var(--border); overflow:hidden; display:flex; align-items:center; justify-content:center; position:relative; font-size:18px; color:rgba(255,255,255,.15); }
+    .thumb-slot.filled { border-color:var(--cyan); border-style:solid; }
+    .thumb-slot.filled::after { content:'✓'; position:absolute; top:3px; right:4px; font-size:9px; color:var(--success); font-weight:700; }
+    .thumb-slot img { width:100%; height:100%; object-fit:cover; }
+
+    .prog-wrap { margin-top:14px; }
+    .prog-label { display:flex; justify-content:space-between; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-bottom:6px; }
+    .prog-track { background:#0a1628; border-radius:99px; height:6px; overflow:hidden; border:1px solid var(--border); }
+    .prog-fill  { height:100%; background:linear-gradient(90deg,var(--accent),var(--cyan)); border-radius:99px; width:0%; transition:width .4s ease; }
+
+    .enc-bar-wrap { margin-top:12px; display:none; }
+    .enc-bar-wrap.visible { display:block; }
+    .enc-bar-track { background:#0a1628; border-radius:99px; height:8px; overflow:hidden; border:1px solid var(--border); position:relative; }
+    .enc-bar-fill  { height:100%; background:linear-gradient(90deg,var(--success),var(--cyan)); border-radius:99px; width:0%; animation:enc-move 1.5s ease-in-out infinite alternate; }
+    @keyframes enc-move { from{width:20%} to{width:90%} }
+    .enc-label { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-bottom:5px; }
+
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 20px; border-radius:10px; font-family:'Sora',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:all .2s; }
+    .btn-primary { background:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(30,136,229,.3); }
+    .btn-primary:hover:not(:disabled) { background:#1976d2; transform:translateY(-1px); }
+    .btn-primary:disabled { background:#1e3560; color:var(--muted); box-shadow:none; cursor:not-allowed; }
+    .btn-danger { background:transparent; border:1px solid var(--danger); color:var(--danger); }
+    .btn-danger:hover { background:rgba(211,47,47,.1); }
+    .btn-success { background:var(--success); color:#002b00; box-shadow:0 4px 14px rgba(0,200,83,.25); }
+    .btn-success:hover:not(:disabled) { transform:translateY(-1px); }
+    .btn-success:disabled { background:#1e3a2a; color:#3a6a4a; box-shadow:none; cursor:not-allowed; }
+    .btn-full { width:100%; }
+    .btn-row { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; margin-bottom:7px; }
+    .form-input { width:100%; background:#090f20; border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:'Sora',sans-serif; font-size:14px; padding:11px 14px; outline:none; transition:border-color .2s,box-shadow .2s; }
+    .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,136,229,.12); }
+    .form-input::placeholder { color:#1e3560; }
+
+    hr.div { border:none; border-top:1px solid var(--border); margin:16px 0; }
+    .info-row { display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:5px 0; }
+    .info-key { color:var(--muted); }
+    .info-val { font-family:'JetBrains Mono',monospace; font-size:12px; }
+    .pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-family:'JetBrains Mono',monospace; padding:3px 10px; border-radius:20px; }
+    .pill-active  { background:rgba(0,180,216,.12); border:1px solid var(--cyan); color:var(--cyan); }
+    .pill-success { background:rgba(0,200,83,.12); border:1px solid var(--success); color:var(--success); }
+    .pill-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+    .tip-list { list-style:none; display:flex; flex-direction:column; gap:10px; }
+    .tip-item { display:flex; align-items:center; gap:10px; font-size:13px; }
+    .tip-icon { width:28px; height:28px; border-radius:8px; flex-shrink:0; background:rgba(30,136,229,.1); border:1px solid rgba(30,136,229,.2); display:flex; align-items:center; justify-content:center; font-size:14px; }
+    .tip-text { color:var(--muted); line-height:1.5; }
+
+    .alert { border-radius:10px; padding:12px 16px; font-size:13px; display:flex; align-items:flex-start; gap:10px; margin-bottom:16px; }
+    .alert-success { background:rgba(0,200,83,.1); border:1px solid rgba(0,200,83,.25); color:#7dffb0; }
+    .alert-error   { background:rgba(211,47,47,.1); border:1px solid rgba(211,47,47,.25); color:#ff8a80; }
+    #alertBox { display:none; }
+
+    #toast { position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:13px 18px; font-size:13px; display:flex; align-items:center; gap:10px; box-shadow:0 8px 32px rgba(0,0,0,.4); transform:translateY(20px); opacity:0; transition:all .3s ease; z-index:999; max-width:280px; }
+    #toast.show { transform:translateY(0); opacity:1; }
+    #toast.success { border-color:var(--success); }
+    #toast.error   { border-color:var(--danger); }
+
+    footer { border-top:1px solid var(--border); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+    footer a { color:var(--muted); text-decoration:none; }
+    footer a:hover { color:var(--text); }
+  </style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">🛡</div>
+    <div>
+      <div class="topbar-title">Driver Verification System</div>
+      <div class="topbar-sub">FACE REGISTRATION PORTAL</div>
+    </div>
+  </div>
+  <nav class="topbar-nav">
+    <a href="/">Dashboard</a>
+    <a href="/register" class="active">Register</a>
+    <a href="/users">Users</a>
+    <a href="/logs">Logs</a>
+  </nav>
+</nav>
+
+<div class="page">
+  <div class="page-title">Register New Face</div>
+  <div class="page-desc">Capture 5 frames then click Register &amp; Encode.</div>
+
+  <div class="step-chips">
+    <div class="chip done"   id="chip1"><div class="chip-dot"></div> Enter Name</div>
+    <div class="chip active" id="chip2"><div class="chip-dot"></div> Face Capture</div>
+    <div class="chip"        id="chip3"><div class="chip-dot"></div> Confirm</div>
+  </div>
+
+  <div id="alertBox" class="alert"></div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-blue">📷</div>
+          <div>
+            <div class="card-title">Live Camera</div>
+            <div class="card-meta">ALIGN FACE WITHIN THE OVAL GUIDE</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="cam-wrap">
+            <!-- Browser camera video element (replaces server MJPEG stream) -->
+            <video id="camFeed" autoplay playsinline muted></video>
+
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+            <div class="face-oval"></div>
+            <div class="scan-line"></div>
+            <div class="cam-badge">● LIVE</div>
+            <div class="cam-count">Captured: <span id="countNum">0</span>/5</div>
+
+            <!-- Permission / error banner -->
+            <div id="camPermBanner">
+              <div style="font-size:32px;">📷</div>
+              <div>Camera access needed to capture your face.</div>
+              <button onclick="startCamera()">Enable Camera</button>
+            </div>
+          </div>
+
+          <!-- Hidden canvas used to snapshot a frame from the video -->
+          <canvas id="captureCanvas" style="display:none;"></canvas>
+
+          <div class="thumb-row">
+            <div class="thumb-slot" id="slot0">👤</div>
+            <div class="thumb-slot" id="slot1">👤</div>
+            <div class="thumb-slot" id="slot2">👤</div>
+            <div class="thumb-slot" id="slot3">👤</div>
+            <div class="thumb-slot" id="slot4">👤</div>
+          </div>
+
+          <div class="prog-wrap">
+            <div class="prog-label"><span>Capture Progress</span><span id="progPct">0%</span></div>
+            <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="captureFrame()">📸 Capture</button>
+            <button class="btn btn-danger"  onclick="resetCaptures()">↺ Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-cyan">🪪</div>
+          <div>
+            <div class="card-title">Driver Details</div>
+            <div class="card-meta">FILL BEFORE CAPTURING</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" id="driverName" class="form-input" placeholder="e.g. D5_Vikram" oninput="checkRegBtn()"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Driver ID (optional)</label>
+            <input type="text" id="driverId" class="form-input" placeholder="e.g. DRV-00105"/>
+          </div>
+          <hr class="div"/>
+          <div class="info-row">
+            <span class="info-key">Captures needed</span>
+            <span class="info-val">5 frames</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Status</span>
+            <div class="pill pill-active" id="regStatus">
+              <span class="pill-dot"></span> CAPTURING
+            </div>
+          </div>
+          <hr class="div"/>
+
+          <div class="enc-bar-wrap" id="encBarWrap">
+            <div class="enc-label" id="encLabel">⏳ Encoding faces... please wait</div>
+            <div class="enc-bar-track"><div class="enc-bar-fill"></div></div>
+          </div>
+
+          <button class="btn btn-success btn-full" id="btnRegister" onclick="registerFace()" disabled style="margin-top:12px;">
+            ✅ Register &amp; Encode
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon ci-green">💡</div>
+          <div><div class="card-title">Capture Tips</div><div class="card-meta">FOR BEST ACCURACY</div></div>
+        </div>
+        <div class="card-body">
+          <ul class="tip-list">
+            <li class="tip-item"><div class="tip-icon">☀️</div><span class="tip-text">Use bright, even lighting</span></li>
+            <li class="tip-item"><div class="tip-icon">👁️</div><span class="tip-text">Look directly at camera for first frame</span></li>
+            <li class="tip-item"><div class="tip-icon">↔️</div><span class="tip-text">Slightly tilt left/right for later frames</span></li>
+            <li class="tip-item"><div class="tip-icon">🚫</div><span class="tip-text">Remove glasses/caps if possible</span></li>
+            <li class="tip-item"><div class="tip-icon">📏</div><span class="tip-text">Keep 40–60 cm from camera</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>🛡 Driver Verification System</span>
+  <span><a href="/">Dashboard</a> · <a href="/users">Users</a></span>
+</footer>
+
+<div id="toast"><span id="toastIcon">✅</span><span id="toastMsg"></span></div>
+
+<script>
+  const MAX = 5;
+  let captured   = [];
+  let pollTimer  = null;
+  let camReady   = false;
+
+  const video         = document.getElementById('camFeed');
+  const captureCanvas = document.getElementById('captureCanvas');
+
+  /* ─── Start browser camera ───────────────────────── */
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      video.srcObject = stream;
+      video.addEventListener('loadedmetadata', () => {
+        captureCanvas.width  = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+        camReady = true;
+      });
+      document.getElementById('camPermBanner').style.display = 'none';
+    } catch (err) {
+      const banner = document.getElementById('camPermBanner');
+      banner.innerHTML = `<div style="font-size:32px;">⛔</div>
+        <div>Camera access denied.<br>Allow camera in browser settings and reload.</div>`;
+    }
+  }
+
+  startCamera(); // auto-attempt on load
+
+  /* ─── Helpers ─────────────────────────────────────── */
+  function toast(msg, type='success') {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toastIcon').textContent = type==='success'?'✅':type==='error'?'❌':'ℹ️';
+    t.className = 'show ' + type;
+    setTimeout(() => t.className = '', 3500);
+  }
+
+  function showAlert(msg, type='success') {
+    const el = document.getElementById('alertBox');
+    el.className = `alert alert-${type}`;
+    el.innerHTML = msg;
+    el.style.display = 'flex';
+  }
+
+  /* ─── Capture a frame from the live video ─────────── */
+  function captureFrame() {
+    const name = document.getElementById('driverName').value.trim();
+    if (!name)          { toast('Enter driver name first', 'error'); return; }
+    if (!camReady)      { toast('Camera not ready yet', 'error');    return; }
+    if (captured.length >= MAX) { toast('Already captured 5 frames', 'info'); return; }
+
+    /* Snapshot current video frame onto hidden canvas */
+    captureCanvas.width  = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    captureCanvas.getContext('2d').drawImage(video, 0, 0);
+    const b64 = captureCanvas.toDataURL('image/jpeg', 0.85);
+    captured.push(b64);
+    updateThumbs();
+    updateProgress();
+
+    fetch('/register_face', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, image: b64 })
+    }).then(r => r.json()).then(() => {
+      toast(`Frame ${captured.length}/5 saved`, 'success');
+      if (captured.length === MAX) checkRegBtn();
+    }).catch(() => toast('Save failed — check server', 'error'));
+  }
+
+  function updateThumbs() {
+    captured.forEach((src, i) => {
+      const s = document.getElementById('slot' + i);
+      s.innerHTML = `<img src="${src}"/>`;
+      s.classList.add('filled');
+    });
+    document.getElementById('countNum').textContent = captured.length;
+  }
+
+  function updateProgress() {
+    const pct = Math.round((captured.length / MAX) * 100);
+    document.getElementById('progFill').style.width = pct + '%';
+    document.getElementById('progPct').textContent  = pct + '%';
+  }
+
+  function resetCaptures() {
+    captured = [];
+    for (let i = 0; i < MAX; i++) {
+      const s = document.getElementById('slot' + i);
+      s.innerHTML = '👤'; s.classList.remove('filled');
+    }
+    document.getElementById('progFill').style.width = '0%';
+    document.getElementById('progPct').textContent  = '0%';
+    document.getElementById('countNum').textContent  = '0';
+    document.getElementById('btnRegister').disabled  = true;
+    document.getElementById('alertBox').style.display = 'none';
+    const st = document.getElementById('regStatus');
+    st.className = 'pill pill-active';
+    st.innerHTML = '<span class="pill-dot"></span> CAPTURING';
+    toast('Reset — start over', 'info');
+  }
+
+  function checkRegBtn() {
+    const name = document.getElementById('driverName').value.trim();
+    document.getElementById('btnRegister').disabled = !(name && captured.length === MAX);
+  }
+
+  /* ─── Register: kick off background encoding ─────── */
+  function registerFace() {
+    const name = document.getElementById('driverName').value.trim();
+    if (!name || captured.length < MAX) return;
+
+    const btn = document.getElementById('btnRegister');
+    btn.disabled = true;
+    btn.textContent = '⏳ Starting…';
+
+    document.getElementById('encBarWrap').classList.add('visible');
+    document.getElementById('encLabel').textContent = '⏳ Encoding faces… please wait';
+
+    const st = document.getElementById('regStatus');
+    st.className = 'pill pill-active';
+    st.innerHTML = '<span class="pill-dot"></span> ENCODING...';
+
+    fetch('/finalize_registration', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => { pollTimer = setInterval(pollEncodingStatus, 1500); })
+      .catch(() => {
+        btn.disabled = false;
+        btn.textContent = '✅ Register & Encode';
+        document.getElementById('encBarWrap').classList.remove('visible');
+        toast('Failed to start encoding', 'error');
+      });
+  }
+
+  function pollEncodingStatus() {
+    fetch('/encoding_status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          clearInterval(pollTimer);
+          document.getElementById('encBarWrap').classList.remove('visible');
+          document.getElementById('btnRegister').disabled = false;
+          document.getElementById('btnRegister').textContent = '✅ Register & Encode';
+          toast('Encoding error: ' + data.error, 'error');
+          return;
+        }
+        if (data.done) {
+          clearInterval(pollTimer);
+          document.getElementById('encBarWrap').classList.remove('visible');
+
+          const st = document.getElementById('regStatus');
+          st.className = 'pill pill-success';
+          st.innerHTML = '<span class="pill-dot"></span> REGISTERED';
+
+          const btn = document.getElementById('btnRegister');
+          btn.textContent = '✅ Done!';
+
+          document.getElementById('chip3').classList.add('done');
+          document.getElementById('chip2').classList.remove('active');
+
+          showAlert(
+            `✅ <strong>${document.getElementById('driverName').value.trim()}</strong> registered!
+             ${data.total} total encodings loaded.
+             Go to <a href="/" style="color:var(--cyan)">Dashboard</a> to verify.`,
+            'success'
+          );
+          toast('Registration complete!', 'success');
+        }
+      })
+      .catch(() => {});
+  }
+</script>
+</body>
+</html>
