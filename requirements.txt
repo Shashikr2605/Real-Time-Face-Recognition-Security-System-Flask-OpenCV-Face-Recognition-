@@ -1,8 +1,5 @@
 flask
-flask-cors
-pyopenssl          # for self-signed HTTPS cert (camera access)
-face-recognition
-opencv-python-headless
 numpy
-Pillow
+opencv-python
+deepface
 gunicorn
