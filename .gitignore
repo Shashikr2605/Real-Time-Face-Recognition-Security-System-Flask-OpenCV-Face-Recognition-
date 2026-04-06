@@ -1,0 +1,10 @@
+cert.pem
+key.pem
+encodings.pkl
+dataset/
+logs.txt
+__pycache__/
+*.pyc
+env/
+venv/
+.env
